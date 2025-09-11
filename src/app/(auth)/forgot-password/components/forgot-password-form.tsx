@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import { z } from 'zod'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { toast } from 'sonner'
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 import {
   Form,
@@ -12,40 +12,40 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form'
-import { Button } from '@/components/ui/button'
+} from "@/components/ui/form";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
-import { emailSchema } from '@/lib/validation-schemas'
+import { emailSchema } from "@/lib/validation-schemas";
 
 // Schema for email validation
 const formSchema = z.object({
   email: emailSchema,
-})
+});
 
 export default function ForgetPasswordPreview() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
+      email: "",
     },
-  })
+  });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       // Assuming a function to send reset email
-      console.log(values)
-      toast.success('Password reset email sent. Please check your inbox.')
+      console.log(values);
+      toast.success("Password reset email sent. Please check your inbox.");
     } catch (error) {
-      console.error('Error sending password reset email', error)
-      toast.error('Failed to send password reset email. Please try again.')
+      console.error("Error sending password reset email", error);
+      toast.error("Failed to send password reset email. Please try again.");
     }
   }
 
@@ -91,5 +91,5 @@ export default function ForgetPasswordPreview() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

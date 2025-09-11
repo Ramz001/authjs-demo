@@ -42,7 +42,7 @@ export default function ResetPasswordPreview() {
       // Assuming an async reset password function
       console.log(values);
       toast.success(
-        "Password reset successful. You can now log in with your new password."
+        "Password reset successful. You can now log in with your new password.",
       );
     } catch (error) {
       console.error("Error resetting password", error);
