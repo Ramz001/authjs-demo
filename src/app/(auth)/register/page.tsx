@@ -5,6 +5,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   Form,
@@ -27,10 +29,15 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 
 import { registerFormSchema } from "@/lib/validation-schemas";
+import { register } from "@/actions/register.action";
 
 const formSchema = registerFormSchema;
 
 export default function RegisterPreview() {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [isLoading, setIsLoading] = useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -42,20 +49,34 @@ export default function RegisterPreview() {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      // Assuming an async registration function
-      console.log(values);
-      toast(
-        <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
-          <code className="text-white">{JSON.stringify(values, null, 2)}</code>
-        </pre>,
-      );
-    } catch (error) {
-      console.error("Form submission error", error);
-      toast.error("Failed to submit the form. Please try again.");
-    }
-  }
+  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsLoading(true);
+
+    startTransition(async () => {
+      try {
+        const result = await register(values);
+
+        if (result?.error) {
+          toast.error(result.error);
+          return;
+        }
+
+        if (result?.success) {
+          toast.success(result.success);
+          form.reset();
+          // Redirect to login page after successful registration
+          router.push("/login");
+        }
+      } catch (error) {
+        console.error("Registration error:", error);
+        toast.error("An unexpected error occurred. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    });
+  };
+
+  const isSubmitting = isPending || isLoading;
 
   return (
     <Card className="mx-auto max-w-md w-full">
@@ -67,7 +88,10 @@ export default function RegisterPreview() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-8"
+          >
             <div className="grid gap-4">
               {/* Name Field */}
               <FormField
@@ -77,7 +101,12 @@ export default function RegisterPreview() {
                   <FormItem className="grid gap-2">
                     <FormLabel htmlFor="name">Full Name</FormLabel>
                     <FormControl>
-                      <Input id="name" placeholder="John Doe" {...field} />
+                      <Input
+                        id="name"
+                        placeholder="John Doe"
+                        disabled={isSubmitting}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -97,6 +126,7 @@ export default function RegisterPreview() {
                         placeholder="johndoe@mail.com"
                         type="email"
                         autoComplete="email"
+                        disabled={isSubmitting}
                         {...field}
                       />
                     </FormControl>
@@ -113,14 +143,11 @@ export default function RegisterPreview() {
                   <FormItem className="grid gap-2">
                     <FormLabel htmlFor="phone">Phone Number</FormLabel>
                     <FormControl>
-                      <PhoneInput {...field} defaultCountry="TR" />
-                      {/* <Input
-                          id="phone"
-                          placeholder="555-123-4567"
-                          type="tel"
-                          autoComplete="tel"
-                          {...field}
-                        /> */}
+                      <PhoneInput
+                        {...field}
+                        defaultCountry="UZ"
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -139,6 +166,7 @@ export default function RegisterPreview() {
                         id="password"
                         placeholder="******"
                         autoComplete="new-password"
+                        disabled={isSubmitting}
                         {...field}
                       />
                     </FormControl>
@@ -161,6 +189,7 @@ export default function RegisterPreview() {
                         id="confirmPassword"
                         placeholder="******"
                         autoComplete="new-password"
+                        disabled={isSubmitting}
                         {...field}
                       />
                     </FormControl>
@@ -169,8 +198,8 @@ export default function RegisterPreview() {
                 )}
               />
 
-              <Button type="submit" className="w-full">
-                Register
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Creating Account..." : "Register"}
               </Button>
             </div>
           </form>
