@@ -1,80 +1,160 @@
+import type { Adapter } from "@auth/core/adapters";
+import prisma from "./lib/prisma";
+import {
+  mapUserToAdapter,
+  mapAccountToAdapter,
+  mapAdapterToAccount,
+  mapAdapterToAuthenticator,
+  mapAdapterToSession,
+  mapAdapterToUser,
+  mapAuthenticatorToAdapter,
+  mapSessionToAdapter,
+} from "./utils/adapter.maps";
 
-import type { PrismaClient } from "@prisma/client";
-import type {
-  Adapter,
-  AdapterAccount,
-  AdapterSession,
-  AdapterUser,
-} from "@auth/core/adapters";
-
-export function PrismaAdapter(
-  prisma: PrismaClient | ReturnType<PrismaClient["$extends"]>,
-): Adapter {
-  const p = prisma as PrismaClient;
+export function PrismaAdapter(): Adapter {
+  const p = prisma;
   return {
-    // We need to let Prisma generate the ID because our default UUID is incompatible with MongoDB
-    createUser: ({ id, ...data }) => p.user.create(stripUndefined(data)),
-    getUser: (id) => p.user.findUnique({ where: { id } }),
-    getUserByEmail: (email) => p.user.findUnique({ where: { email } }),
+    createUser: async ({ id, ...data }) => {
+      const userData = mapAdapterToUser({ id, ...data });
+      const user = await p.user.create({ data: stripUndefined(userData) });
+      return mapUserToAdapter(user);
+    },
+
+    getUser: async (id) => {
+      const user = await p.user.findUnique({ where: { id } });
+      return user ? mapUserToAdapter(user) : null;
+    },
+
+    getUserByEmail: async (email) => {
+      const user = await p.user.findUnique({ where: { email } });
+      return user ? mapUserToAdapter(user) : null;
+    },
+
     async getUserByAccount(provider_providerAccountId) {
       const account = await p.account.findUnique({
-        where: { provider_providerAccountId },
+        where: {
+          provider_provider_account_id: {
+            provider: provider_providerAccountId.provider,
+            provider_account_id: provider_providerAccountId.providerAccountId,
+          },
+        },
         include: { user: true },
       });
-      return (account?.user as AdapterUser) ?? null;
+      return account?.user ? mapUserToAdapter(account.user) : null;
     },
-    updateUser: ({ id, ...data }) =>
-      p.user.update({
+
+    updateUser: async ({ id, ...data }) => {
+      const userData = mapAdapterToUser(data);
+      const user = await p.user.update({
         where: { id },
-        ...stripUndefined(data),
-      }) as Promise<AdapterUser>,
-    deleteUser: (id) =>
-      p.user.delete({ where: { id } }) as Promise<AdapterUser>,
-    linkAccount: (data) =>
-      p.account.create({ data }) as unknown as AdapterAccount,
-    unlinkAccount: (provider_providerAccountId) =>
-      p.account.delete({
-        where: { provider_providerAccountId },
-      }) as unknown as AdapterAccount,
+        data: stripUndefined(userData),
+      });
+      return mapUserToAdapter(user);
+    },
+
+    deleteUser: async (id) => {
+      const user = await p.user.delete({ where: { id } });
+      return mapUserToAdapter(user);
+    },
+
+    linkAccount: async (data) => {
+      const accountData = mapAdapterToAccount(data);
+      const account = await p.account.create({
+        data: {
+          ...accountData,
+          user_id: data.userId,
+        },
+      });
+      return mapAccountToAdapter(account);
+    },
+
+    unlinkAccount: async (provider_providerAccountId) => {
+      const account = await p.account.delete({
+        where: {
+          provider_provider_account_id: {
+            provider: provider_providerAccountId.provider,
+            provider_account_id: provider_providerAccountId.providerAccountId,
+          },
+        },
+      });
+      return mapAccountToAdapter(account);
+    },
+
     async getSessionAndUser(sessionToken) {
       const userAndSession = await p.session.findUnique({
-        where: { sessionToken },
+        where: { token: sessionToken },
         include: { user: true },
       });
       if (!userAndSession) return null;
       const { user, ...session } = userAndSession;
-      return { user, session } as {
-        user: AdapterUser;
-        session: AdapterSession;
+      return {
+        user: mapUserToAdapter(user),
+        session: mapSessionToAdapter(session),
       };
     },
-    createSession: (data) => p.session.create(stripUndefined(data)),
-    updateSession: (data) =>
-      p.session.update({
-        where: { sessionToken: data.sessionToken },
-        ...stripUndefined(data),
-      }),
-    deleteSession: (sessionToken) =>
-      p.session.delete({ where: { sessionToken } }),
-    async createVerificationToken(data) {
-      const verificationToken = await p.verificationToken.create(
-        stripUndefined(data),
-      );
-      if ("id" in verificationToken && verificationToken.id)
-        delete verificationToken.id;
-      return verificationToken;
+
+    createSession: async (data) => {
+      const sessionData = mapAdapterToSession(data);
+      const session = await p.session.create({
+        data: {
+          ...sessionData,
+          user_id: data.userId,
+        },
+      });
+      return mapSessionToAdapter(session);
     },
+
+    updateSession: async (data) => {
+      const sessionData = mapAdapterToSession(data);
+      const session = await p.session.update({
+        where: { token: data.sessionToken },
+        data: stripUndefined(sessionData),
+      });
+      return mapSessionToAdapter(session);
+    },
+
+    deleteSession: async (sessionToken) => {
+      await p.session.delete({ where: { token: sessionToken } });
+    },
+
+    async createVerificationToken(data) {
+      // Look up the user by the identifier (email) to get the user_id
+      const user = await p.user.findUnique({
+        where: { email: data.identifier },
+      });
+
+      if (!user) {
+        throw new Error(`User not found for identifier: ${data.identifier}`);
+      }
+
+      const token = await p.token.create({
+        data: {
+          type: "Verification",
+          user_id: user.id,
+          token: data.token,
+          expires: data.expires,
+        },
+      });
+      return {
+        identifier: data.identifier,
+        token: token.token,
+        expires: token.expires,
+      };
+    },
+
     async useVerificationToken(identifier_token) {
       try {
-        const verificationToken = await p.verificationToken.delete({
-          where: { identifier_token },
+        const token = await p.token.delete({
+          where: {
+            token: identifier_token.token,
+          },
         });
-        if ("id" in verificationToken && verificationToken.id)
-          delete verificationToken.id;
-        return verificationToken;
+        return {
+          identifier: identifier_token.identifier,
+          token: token.token,
+          expires: token.expires,
+        };
       } catch (error: unknown) {
-        // If token already used/deleted, just return null
-        // https://www.prisma.io/docs/reference/api-reference/error-reference#p2025
         if (
           error &&
           typeof error === "object" &&
@@ -85,29 +165,48 @@ export function PrismaAdapter(
         throw error;
       }
     },
+
     async getAccount(providerAccountId, provider) {
-      return p.account.findFirst({
-        where: { providerAccountId, provider },
-      }) as Promise<AdapterAccount | null>;
+      const account = await p.account.findFirst({
+        where: {
+          provider_account_id: providerAccountId,
+          provider: provider,
+        },
+      });
+      return account ? mapAccountToAdapter(account) : null;
     },
+
     async createAuthenticator(data) {
-      return p.authenticator.create(stripUndefined(data));
+      const authenticatorData = mapAdapterToAuthenticator(data);
+      const authenticator = await p.authenticator.create({
+        data: {
+          ...authenticatorData,
+          user_id: data.userId,
+        },
+      });
+      return mapAuthenticatorToAdapter(authenticator);
     },
+
     async getAuthenticator(credentialID) {
-      return p.authenticator.findUnique({
-        where: { credentialID },
+      const authenticator = await p.authenticator.findUnique({
+        where: { credential_id: credentialID },
       });
+      return authenticator ? mapAuthenticatorToAdapter(authenticator) : null;
     },
+
     async listAuthenticatorsByUserId(userId) {
-      return p.authenticator.findMany({
-        where: { userId },
+      const authenticators = await p.authenticator.findMany({
+        where: { user_id: userId },
       });
+      return authenticators.map(mapAuthenticatorToAdapter);
     },
+
     async updateAuthenticatorCounter(credentialID, counter) {
-      return p.authenticator.update({
-        where: { credentialID },
+      const authenticator = await p.authenticator.update({
+        where: { credential_id: credentialID },
         data: { counter },
       });
+      return mapAuthenticatorToAdapter(authenticator);
     },
   };
 }
@@ -116,5 +215,5 @@ export function PrismaAdapter(
 function stripUndefined<T>(obj: T) {
   const data = {} as T;
   for (const key in obj) if (obj[key] !== undefined) data[key] = obj[key];
-  return { data };
+  return data;
 }
