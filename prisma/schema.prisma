@@ -22,86 +22,83 @@ enum TokenType {
 }
 
 model User {
-  id                       String          @id @default(cuid())
-  full_name                String?
-  email                    String          @unique
-  email_verified           DateTime?
-  phone_number             String?         @unique
-  phone_verified           Boolean         @default(false)
-  password_hash            String?
-  role                     UserRole        @default(USER)
-  image                    String?
-  email_verification_token String?
-  password_reset_token     String?
-  password                 String?
-  last_login               DateTime?
-  accounts                 Account[]
-  sessions                 Session[]
-  authenticators           Authenticator[]
-  created_at               DateTime        @default(now())
-  updated_at               DateTime        @updatedAt
-  mfa_enabled_at           DateTime?
-  Token                    Token[]
+  id              String          @id @default(cuid())
+  fullName        String?         @map("full_name")
+  email           String          @unique
+  emailVerifiedAt DateTime?       @map("email_verified_at")
+  phoneNumber     String?         @unique @map("phone_number")
+  phoneVerifiedAt DateTime?       @map("phone_verified_at")
+  role            UserRole        @default(USER)
+  image           String?
+  password        String?
+  lastLogin       DateTime?       @map("last_login")
+  accounts        Account[]
+  sessions        Session[]
+  authenticators  Authenticator[]
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  mfaEnabledAt    DateTime?       @map("mfa_enabled_at")
+  tokens          Token[]
 }
 
 model Account {
-  id                  String   @id @default(uuid())
-  user_id             String
-  type                String
-  provider            String
-  provider_account_id String
-  refresh_token       String?
-  access_token        String?
-  expires_at          Int?
-  token_type          String?
-  scope               String?
-  id_token            String?
-  session_state       String?
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
-  user                User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  refreshToken      String?  @map("refresh_token")
+  accessToken       String?  @map("access_token")
+  expiresAt         Int?     @map("expires_at")
+  tokenType         String?  @map("token_type")
+  scope             String?
+  idToken           String?  @map("id_token")
+  sessionState      String?  @map("session_state")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([provider, provider_account_id])
+  @@unique([provider, providerAccountId])
 }
 
 model Session {
-  id         String   @id @default(uuid())
-  token      String   @unique
-  user_id    String
-  expires    DateTime
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expires   DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([user_id])
+  @@index([userId])
 }
 
 model Token {
-  id         String    @id @default(uuid())
-  type       TokenType @default(Verification)
-  user_id    String
-  token      String    @unique
-  expires    DateTime
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id        String    @id @default(uuid())
+  type      TokenType @default(Verification)
+  userId    String    @map("user_id")
+  token     String    @unique
+  expires   DateTime
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([type])
   @@index([expires])
 }
 
 model Authenticator {
-  credential_id          String   @unique
-  user_id                String
-  provider_account_id    String
-  credential_public_key  String
-  counter                Int
-  credential_device_type String
-  credential_backed_up   Boolean
-  transports             String?
-  user                   User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  created_at             DateTime @default(now())
-  updated_at             DateTime @updatedAt
+  credentialId         String   @unique @map("credential_id")
+  userId               String   @map("user_id")
+  providerAccountId    String   @map("provider_account_id")
+  credentialPublicKey  String   @map("credential_public_key")
+  counter              Int
+  credentialDeviceType String   @map("credential_device_type")
+  credentialBackedUp   Boolean  @map("credential_backed_up")
+  transports           String?
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
-  @@id([user_id, credential_id])
+  @@id([userId, credentialId])
 }
